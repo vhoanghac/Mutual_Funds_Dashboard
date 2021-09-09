@@ -1,0 +1,110 @@
+---
+title: "Mutual Funds Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(shinyWidgets)
+library(shinyjs)
+
+# Core
+library(tidyverse)
+library(tidyquant)
+library(data.table)
+
+# Interactive Visualizations
+library(plotly)
+```
+
+```{r}
+data <- fread("data_tidied/full_data.csv")
+```
+
+Column {.sidebar}
+---------------------------------------------------------------
+
+```{r}
+useShinyjs(rmd = TRUE)
+
+pickerInput(
+  inputId = "picker_fund",
+  label   = h4("Funds"),
+  choices = toupper(unique(data$symbol)),
+  selected = c("E1VFVN30", "DCDS"),
+  multiple = TRUE,
+  options = list(
+    `actions-box` = TRUE,
+    size = 10,
+    `selected-text-format` = "Quy"
+  )
+)
+
+output$picker_fund_values <- renderPrint(input$picker_fund)
+textOutput(outputId = "picker_fund_values")
+
+# Apply Button:
+actionButton(inputId = "apply", label = "Apply", icon = icon("play"))
+
+# Reset Button:
+actionButton(inputId = "reset", label = "Reset", icon = icon("sync"))
+```
+
+```{r}
+# After click on Apply button:
+
+```
+
+Row {data-height=150}
+---------------------------------------------------------------
+
+```{r}
+
+```
+
+### Test
+```{r}
+
+```
+
+### Test 2
+```{r}
+
+```
+
+Row {data-height=850}
+---------------------------------------------------------------
+
+```{r}
+
+```
+
+### Plot
+```{r}
+# Plot after click on Apply button:
+
+data_filtered <- data %>% 
+  as_tibble() %>% 
+  filter(symbol %in% c("dcds", "e1vfvn30")) %>%  # input$picker_fund
+  filter(date >= "2014-01-01" & date <= "2017-01-01") %>%  # input$date ???
+  group_by(symbol) %>% 
+  pivot_wider(names_from = symbol,
+              values_from = returns, values_fill = NA_integer_) %>% 
+  drop_na()
+
+columns <- c("dcds", "e1vfvn30")  # input$picker_fund
+  
+data_filtered[1, columns, with = FALSE] <- 0 # first row = 0
+
+data_filtered
+
+# reactive(
+#  filterd_data <- data[symbol %chin% tolower(input$picker_fund)][date %between% c("2018-01-01", "2020-01-01")]
+# )
+
+```
