@@ -17,6 +17,7 @@ library(shinyjs)
 library(tidyverse)
 library(tidyquant)
 library(data.table)
+library(scales)
 
 # Interactive Visualizations
 library(plotly)
@@ -60,36 +61,17 @@ actionButton(inputId = "reset", label = "Reset", icon = icon("sync"))
 
 ```
 
-Row {data-height=150}
+Row
 ---------------------------------------------------------------
 
 ```{r}
 
 ```
 
-### Test
-```{r}
-
-```
-
-### Test 2
-```{r}
-
-```
-
-Row {data-height=850}
----------------------------------------------------------------
+### Cumulative Returns Plot:
 
 ```{r}
-
-```
-
-### Plot
-```{r}
-# Plot after click on Apply button:
-
 data_filtered <- data %>% 
-  as_tibble() %>% 
   filter(symbol %in% c("dcds", "e1vfvn30")) %>%  # input$picker_fund
   filter(date >= "2014-01-01" & date <= "2017-01-01") %>%  # input$date ???
   group_by(symbol) %>% 
@@ -101,10 +83,83 @@ columns <- c("dcds", "e1vfvn30")  # input$picker_fund
   
 data_filtered[1, columns, with = FALSE] <- 0 # first row = 0
 
-data_filtered
+```
+
+
+```{r}
+# Cumulative returns plot:
+data_filtered %>% 
+  pivot_longer(names_to = "symbol", values_to = "returns", -date) %>% 
+  group_by(symbol) %>% 
+  mutate(growth = cumprod(1 + returns)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = date, y = growth, color = symbol)) + 
+  geom_line(size = 1)
 
 # reactive(
 #  filterd_data <- data[symbol %chin% tolower(input$picker_fund)][date %between% c("2018-01-01", "2020-01-01")]
 # )
 
 ```
+
+Row
+---------------------------------------------------------------
+
+### Rolling returns plot:
+
+```{r}
+# Periods:
+radioGroupButtons(
+  inputId = "time_period",
+  label   = "Period (Thang)",
+  choices = c(6, 
+              12,
+              24,
+              36,
+              48),
+  selected = 12,
+  status = "primary",
+  justified = TRUE,
+  checkIcon = list(
+    yes = icon("ok", lib = "glyphicon"))
+)
+```
+
+```{r}
+rolling_returns_tbl <- reactive({
+  
+  time_period <- as.integer(input$time_period)
+  
+  data_filtered %>%
+    pivot_longer(names_to = "symbol", values_to = "returns", -date) %>%
+    group_by(symbol) %>%
+    mutate(roll_annr = rollapply(returns,
+                                 FUN   = function(x) prod(1+x) - 1,
+                                 width = time_period,
+                                 align = "left",
+                                 fill  = NA)) %>%
+    ungroup() %>% 
+    mutate(label_txt = str_glue("Date: {date}
+                                Quy: {toupper(symbol)}
+                                Return: {scales::percent(roll_annr, accuracy = 0.1)}"))
+})
+
+output$plotly_rolling_returns <- renderPlotly({
+  
+  p <- rolling_returns_tbl() %>% 
+    ggplot(aes(x = date,
+               y = roll_annr,
+               color = symbol)) + theme_tq() + 
+    geom_line() + 
+    geom_point(aes(text = label_txt)) +
+    
+    scale_y_continuous(labels = scales::percent_format())
+  
+  ggplotly(p, tooltip = "text") %>% 
+    layout(margin = list(b = 150)) 
+  
+})
+
+plotlyOutput(outputId = "plotly_rolling_returns")
+```
+
