@@ -58,43 +58,78 @@ actionButton(inputId = "reset", label = "Reset", icon = icon("sync"))
 
 ```{r}
 # After click on Apply button:
+# 
+# eventReactive(
+#   eventExpr = input$apply,
+#   
+#   valueExpr = {
+#     
+#     data %>% 
+#       filter(symbol %in% input$picker_fund) %>% 
+#     
+#     
+#     
+#   },
+#   ignoreNULL = FALSE
+# )
 
-```
 
-Row
----------------------------------------------------------------
-
-```{r}
-
-```
-
-### Cumulative Returns Plot:
-
-```{r}
+# Thay vao eventReactive:
 data_filtered <- data %>% 
-  filter(symbol %in% c("dcds", "e1vfvn30")) %>%  # input$picker_fund
-  filter(date >= "2014-01-01" & date <= "2017-01-01") %>%  # input$date ???
+  filter(symbol %in% c("dcds", "e1vfvn30", "vesaf")) %>%  # input$picker_fund
+  # filter(date >= "2014-01-01") %>%  # input$date ??? Maybe no need of this.
   group_by(symbol) %>% 
   pivot_wider(names_from = symbol,
               values_from = returns, values_fill = NA_integer_) %>% 
   drop_na()
 
-columns <- c("dcds", "e1vfvn30")  # input$picker_fund
+columns <- c("dcds", "e1vfvn30", "vesaf")  # input$picker_fund
   
 data_filtered[1, columns, with = FALSE] <- 0 # first row = 0
-
 ```
 
+Row
+---------------------------------------------------------------
+
+### Cumulative Returns Plot:
 
 ```{r}
 # Cumulative returns plot:
-data_filtered %>% 
-  pivot_longer(names_to = "symbol", values_to = "returns", -date) %>% 
-  group_by(symbol) %>% 
-  mutate(growth = cumprod(1 + returns)) %>% 
-  ungroup() %>% 
-  ggplot(aes(x = date, y = growth, color = symbol)) + 
-  geom_line(size = 1)
+
+cumulative_returns_tbl <- reactive({
+  
+  data_filtered %>% 
+    pivot_longer(names_to  = "symbol", 
+                 values_to = "returns", -date) %>% 
+    group_by(symbol) %>% 
+    mutate(growth = cumprod(1 + returns)) %>% 
+    ungroup() %>% 
+    mutate(label_txt = str_glue("Date: {date}
+                                Quy: {toupper(symbol)}
+                                Loi nhuan tich luy: {scales::percent(growth - 1, accuracy = 0.1)}"))
+    
+})
+
+output$plotly_cum_returns <- renderPlotly({
+  
+  p1 <- cumulative_returns_tbl() %>% 
+    ggplot(aes(x = date,
+               y = growth,
+               color = symbol)) + theme_tq() +
+    
+    geom_line(size = 0.7) +
+    geom_point(aes(text = label_txt)) +
+    
+    expand_limits(y = 0.5) + 
+    
+    labs(x = "",
+         y = "")
+    
+  ggplotly(p1, tooltip = "text")
+  
+})
+
+plotlyOutput(outputId = "plotly_cum_returns")
 
 # reactive(
 #  filterd_data <- data[symbol %chin% tolower(input$picker_fund)][date %between% c("2018-01-01", "2020-01-01")]
@@ -136,26 +171,30 @@ rolling_returns_tbl <- reactive({
     mutate(roll_annr = rollapply(returns,
                                  FUN   = function(x) prod(1+x) - 1,
                                  width = time_period,
-                                 align = "left",
+                                 align = "right",
                                  fill  = NA)) %>%
+    mutate(date_2 = lag(date, n = time_period)) %>% 
     ungroup() %>% 
-    mutate(label_txt = str_glue("Date: {date}
+    mutate(label_txt = str_glue("Ngay mua: {date_2}
+                                Gia tri tai: {date}
                                 Quy: {toupper(symbol)}
                                 Return: {scales::percent(roll_annr, accuracy = 0.1)}"))
 })
 
 output$plotly_rolling_returns <- renderPlotly({
   
-  p <- rolling_returns_tbl() %>% 
+  p2 <- rolling_returns_tbl() %>% 
     ggplot(aes(x = date,
                y = roll_annr,
                color = symbol)) + theme_tq() + 
-    geom_line() + 
+    geom_line(size = 0.7) + 
     geom_point(aes(text = label_txt)) +
     
-    scale_y_continuous(labels = scales::percent_format())
+    scale_y_continuous(labels = scales::percent_format()) +
+    labs(x = "",
+         y = "")
   
-  ggplotly(p, tooltip = "text") %>% 
+  ggplotly(p2, tooltip = "text") %>% 
     layout(margin = list(b = 150)) 
   
 })
