@@ -2,45 +2,45 @@ library(tidyverse)
 library(timetk)
 library(purrr)
 
-# CSV paths:
+# Duong dan folder data chua file CSV
 paths <- fs::dir_ls("data")
 
-# Get file names:
-datanames <-  gsub("\\.csv$","", list.files(path = "data", pattern = "\\.csv$")) %>% 
+# Lay ten cac tep
+datanames <-  gsub("\\.csv$","", list.files(path    = "data", 
+                                            pattern = "\\.csv$")) %>% 
   tolower()
 
-# Import multiple csv to a list:
+# Import/read cac tep va gom vao 1 list
 list <- paths %>% 
   map(function(path){
     read_csv(path)
   })
 
-# Convert to monthly data:
+# Convert sang du lieu thang
 list_converted <- list %>% 
   set_names(datanames) %>% 
-  
   lapply(function(x){
     
     x %>%
       
-      # First day of each month in the dataset
+      # Lay du lieu ngay dau tien trong thang
       summarise_by_time(.date_var = date,
                         .by       = "month",
                         price     = first(price),
                         .type     = "floor") %>% 
       
-      # Calculate monthly returns
+      # Monthly returns
       tq_transmute(select     = price,
                    mutate_fun = periodReturn,
                    period     = "monthly",
                    col_rename = "returns") 
   })
 
-# Convert from list to tibble. Full data.
-data <- lapply(names(list_converted), function(x) cbind(list_converted[[x]], x)) %>% 
-  bind_rows() %>%
-  as.tibble() %>% 
-  rename("symbol" = x)
+# Convert tu list sang table
+data <- list_converted %>% 
+  enframe() %>% 
+  unnest(value) %>% 
+  rename(symbol = name)
 
 # Export
 write_csv(data, "data_tidied/full_data.csv")
