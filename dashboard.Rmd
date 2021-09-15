@@ -2,6 +2,9 @@
 title: "Mutual Funds Dashboard"
 output: 
   flexdashboard::flex_dashboard:
+    theme:
+      version: 4
+      bootswatch: minty
     orientation: rows
     vertical_layout: fill
 runtime: shiny
@@ -17,6 +20,7 @@ library(shinyjs)
 library(tidyverse)
 library(tidyquant)
 library(data.table)
+library(tidytable)
 library(scales)
 
 # Interactive Visualizations
@@ -24,6 +28,7 @@ library(plotly)
 ```
 
 ```{r}
+# Load data
 data <- fread("data_tidied/full_data.csv")
 ```
 
@@ -35,7 +40,7 @@ useShinyjs(rmd = TRUE)
 
 pickerInput(
   inputId = "picker_fund",
-  label   = h4("Funds"),
+  label   = h4("Funds:"),
   choices = toupper(unique(data$symbol)),
   selected = c("E1VFVN30", "DCDS"),
   multiple = TRUE,
@@ -46,46 +51,57 @@ pickerInput(
   )
 )
 
-output$picker_fund_values <- renderPrint(input$picker_fund)
-textOutput(outputId = "picker_fund_values")
-
 # Apply Button:
 actionButton(inputId = "apply", label = "Apply", icon = icon("play"))
 
 # Reset Button:
 actionButton(inputId = "reset", label = "Reset", icon = icon("sync"))
+
+observeEvent(eventExpr = input$reset, handlerExpr = {
+  
+  updatePickerInput(
+    session  = session,
+    inputId  = "picker_fund",
+    selected = c("E1VFVN30", "DCDS")
+  )
+  
+  # Delay sau khi bam nut reset
+  shinyjs::delay(ms = 100, expr = {
+    shinyjs::click(id = "apply")
+  })
+  
+  
+})
 ```
 
 ```{r}
 # After click on Apply button:
-# 
-# eventReactive(
-#   eventExpr = input$apply,
-#   
-#   valueExpr = {
-#     
-#     data %>% 
-#       filter(symbol %in% input$picker_fund) %>% 
-#     
-#     
-#     
-#   },
-#   ignoreNULL = FALSE
-# )
 
-
-# Thay vao eventReactive:
-data_filtered <- data %>% 
-  filter(symbol %in% c("dcds", "e1vfvn30", "vesaf")) %>%  # input$picker_fund
-  # filter(date >= "2014-01-01") %>%  # input$date ??? Maybe no need of this.
-  group_by(symbol) %>% 
-  pivot_wider(names_from = symbol,
-              values_from = returns, values_fill = NA_integer_) %>% 
-  drop_na()
-
-columns <- c("dcds", "e1vfvn30", "vesaf")  # input$picker_fund
+data_tbl <- eventReactive(
   
-data_filtered[1, columns, with = FALSE] <- 0 # first row = 0
+  eventExpr = input$apply,
+
+  valueExpr = {
+    
+    # Filter data dua theo cac input
+    data_filtered <- data %>%
+      filter.(symbol %in% tolower(input$picker_fund)) %>%
+      pivot_wider.(names_from = symbol,
+                  values_from = returns,
+                  values_fill = NA_integer_) %>%
+      drop_na.()
+    
+    
+    columns <- tolower(input$picker_fund)
+    
+    data_filtered[1, columns] <- 0  # gia tri dau tien = 0. with = FALSE (?)
+    
+    return(data_filtered)
+  },
+
+  ignoreNULL = FALSE
+
+)
 ```
 
 Row
@@ -94,47 +110,47 @@ Row
 ### Cumulative Returns Plot:
 
 ```{r}
-# Cumulative returns plot:
-
+# Chuan bi du lieu
 cumulative_returns_tbl <- reactive({
-  
-  data_filtered %>% 
-    pivot_longer(names_to  = "symbol", 
-                 values_to = "returns", -date) %>% 
-    group_by(symbol) %>% 
-    mutate(growth = cumprod(1 + returns)) %>% 
-    ungroup() %>% 
+
+  data_tbl() %>%
+    pivot_longer.(names_to  = "symbol",
+                  values_to = "returns", -date) %>%
+    mutate.(growth = cumprod(1 + returns), .by = symbol) %>% 
     mutate(label_txt = str_glue("Date: {date}
                                 Quy: {toupper(symbol)}
                                 Loi nhuan tich luy: {scales::percent(growth - 1, accuracy = 0.1)}"))
-    
+
 })
 
+# Add output
 output$plotly_cum_returns <- renderPlotly({
-  
-  p1 <- cumulative_returns_tbl() %>% 
-    ggplot(aes(x = date,
-               y = growth,
+
+  p1 <- cumulative_returns_tbl() %>%
+    
+    ggplot(aes(x     = date,
+               y     = growth,
                color = symbol)) + theme_tq() +
-    
+
     geom_line(size = 0.7) +
-    geom_point(aes(text = label_txt)) +
+    geom_point(aes(text = label_txt), size = 1) +
     
-    expand_limits(y = 0.5) + 
+    expand_limits(y = 0.5) +
+    scale_x_date(breaks = scales::pretty_breaks(n = 10)) +
+    
+    geom_hline(yintercept = 1, 
+               linetype   = "dashed", 
+               color      = "#7A7574") +
     
     labs(x = "",
          y = "")
-    
+
   ggplotly(p1, tooltip = "text")
-  
+
 })
 
+# Plot
 plotlyOutput(outputId = "plotly_cum_returns")
-
-# reactive(
-#  filterd_data <- data[symbol %chin% tolower(input$picker_fund)][date %between% c("2018-01-01", "2020-01-01")]
-# )
-
 ```
 
 Row
@@ -145,15 +161,15 @@ Row
 ```{r}
 # Periods:
 radioGroupButtons(
-  inputId = "time_period",
-  label   = "Period (Thang)",
-  choices = c(6, 
+  inputId   = "time_period",
+  label     = "Period (Thang)",
+  choices   = c(6, 
               12,
               24,
               36,
               48),
-  selected = 12,
-  status = "primary",
+  selected  = 12,
+  status    = "primary",
   justified = TRUE,
   checkIcon = list(
     yes = icon("ok", lib = "glyphicon"))
@@ -161,13 +177,15 @@ radioGroupButtons(
 ```
 
 ```{r}
+# Chuan bi du lieu
 rolling_returns_tbl <- reactive({
   
   time_period <- as.integer(input$time_period)
   
-  data_filtered %>%
-    pivot_longer(names_to = "symbol", values_to = "returns", -date) %>%
-    group_by(symbol) %>%
+  data_tbl() %>% 
+    pivot_longer.(names_to  = "symbol",
+                  values_to = "returns", -date) %>%
+    group_by(symbol) %>% 
     mutate(roll_annr = rollapply(returns,
                                  FUN   = function(x) prod(1+x) - 1,
                                  width = time_period,
@@ -181,16 +199,24 @@ rolling_returns_tbl <- reactive({
                                 Return: {scales::percent(roll_annr, accuracy = 0.1)}"))
 })
 
+# Add ouput
 output$plotly_rolling_returns <- renderPlotly({
   
   p2 <- rolling_returns_tbl() %>% 
-    ggplot(aes(x = date,
-               y = roll_annr,
+    ggplot(aes(x     = date,
+               y     = roll_annr,
                color = symbol)) + theme_tq() + 
+    
     geom_line(size = 0.7) + 
-    geom_point(aes(text = label_txt)) +
+    geom_point(aes(text = label_txt), size = 1) +
+    
+    geom_hline(yintercept = 0, 
+               linetype   = "dashed", 
+               color      = "#7A7574") +
     
     scale_y_continuous(labels = scales::percent_format()) +
+    scale_x_date(breaks = scales::pretty_breaks(n = 10)) +
+    
     labs(x = "",
          y = "")
   
@@ -199,6 +225,7 @@ output$plotly_rolling_returns <- renderPlotly({
   
 })
 
+# Plot
 plotlyOutput(outputId = "plotly_rolling_returns")
 ```
 
