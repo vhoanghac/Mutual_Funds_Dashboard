@@ -1,5 +1,5 @@
 ---
-title: "Mutual Funds Dashboard"
+title: "Mutual Funds Dashboard v1.0"
 output: 
   flexdashboard::flex_dashboard:
     theme:
