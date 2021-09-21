@@ -1,6 +1,8 @@
-library(tidyverse)
-library(timetk)
-library(purrr)
+# Packages:
+library(tidyverse) # Core
+library(purrr) # Map
+library(timetk) # summarise by time
+library(tidyquant) # transmute, calculate returns
 
 # Duong dan folder data chua file CSV
 paths <- fs::dir_ls("data")
