@@ -3,6 +3,7 @@ library(tidyverse) # Core
 library(purrr) # Map
 library(timetk) # summarise by time
 library(tidyquant) # transmute, calculate returns
+library(data.table)
 
 # Duong dan folder data chua file CSV
 paths <- fs::dir_ls("data")
@@ -15,7 +16,7 @@ datanames <-  gsub("\\.csv$","", list.files(path    = "data",
 # Import/read cac tep va gom vao 1 list
 list <- paths %>% 
   map(function(path){
-    read_csv(path)
+    fread(path)
   })
 
 # Convert sang du lieu thang
